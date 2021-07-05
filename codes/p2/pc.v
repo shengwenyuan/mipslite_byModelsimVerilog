@@ -10,7 +10,9 @@ module pc (clk, rst, PCWr, result, address);
         else if(PCWr) begin
             address <= result;
         end
+        else address <= address;
     end
 
 endmodule
+
 

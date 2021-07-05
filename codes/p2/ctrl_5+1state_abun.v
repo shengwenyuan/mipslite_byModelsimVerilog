@@ -39,7 +39,7 @@ module controller (
 
     always @(posedge clk, negedge rst) begin
         if(~rst)begin 
-            nowState <= FETCH;
+            nowState <= PRESTART;
         end
         else nowState <= nextState;
     end
@@ -111,7 +111,7 @@ module controller (
             //     //00:pc+4 01:beq 10:j|jal 11:jr
             //     NPCop[0] = beq|jr;
             //     NPCop[1] = j|jal|jr;
-            //end
+            end
             FETCH:begin//0
                 PCWr = 1;
                 IRWr = 1;
@@ -132,7 +132,7 @@ module controller (
             end
 
             EXE:begin//2
-                PCWr = beq|j|jr;
+                PCWr = j|jr;
                 IRWr = 0;
                 DMWr = 0;
                 GPRWr = 0;

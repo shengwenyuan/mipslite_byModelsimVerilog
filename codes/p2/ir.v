@@ -5,5 +5,6 @@ module ir (clk, IRWr, imOut, instruction);
 
     always @(posedge clk) begin
         if(IRWr) instruction <= imOut;
+        else instruction <= instruction;
     end
 endmodule
