@@ -5,3 +5,4 @@ module ar(ReadData1, busA);
     always @(*) begin
         busA = ReadData1;
     end
+endmodule

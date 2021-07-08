@@ -53,7 +53,7 @@ module mips(clk, rst);
     ir ir_(clk, IRWr, temp_instruct, instruction);
 
     gpr gpr_(
-    clk, rst, GPRWr, 
+    clk, rst, GPRWr, overflow,
     instruction[25:21], instruction[20:16], WriteReg, WriteData,
     ReadData1, ReadData2);
 

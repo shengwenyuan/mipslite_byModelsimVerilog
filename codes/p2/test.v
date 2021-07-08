@@ -4,7 +4,7 @@ module test;
   
   initial begin
     $readmemh("p2-testh.txt", mips_.im_1k_.im);
-     clk=0; 
+     clk=1; 
      rst=1;
     #1 rst=0;
     #1 rst=1;
@@ -14,3 +14,4 @@ module test;
     #20 clk=~clk;
 endmodule
     
+

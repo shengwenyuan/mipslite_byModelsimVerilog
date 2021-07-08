@@ -1,13 +1,15 @@
 module controller (
     clk, rst,
-    funct, opeCode, zero, overflow,
-    PCWr, IRWr, M2Rsel, GPRsel, ExtOp, DMWr, NPCop, ALUsrc, ALUop, ALUsign, GPRWr, byteOp
+    funct, opeCode, moveCode, zero, overflow, IntReq,
+    PCWr, IRWr, M2Rsel, GPRsel, ExtOp, DMWr, NPCop, ALUsrc, ALUop, ALUsign, GPRWr, byteOp,
+    EPCWr, EXLWr, wen, eretOp, mfc0Op
 );
     input clk, rst;
     input [5:0] funct;
     input [5:0] opeCode;
-    input zero, overflow;
-    output reg PCWr, IRWr, DMWr, GPRWr, ALUsrc, ALUsign, byteOp;
+    input [4:0] moveCode;
+    input zero, overflow, IntReq;
+    output reg PCWr, IRWr, DMWr, GPRWr, EPCWr, EXLWr, ALUsrc, ALUsign, byteOp, wen, eretOp, mfc0Op;
     output reg [1:0] M2Rsel, GPRsel, ALUop, ExtOp, NPCop;
 
     wire addu = (funct == 6'b100001)&(opeCode == 6'b000000);
@@ -25,17 +27,20 @@ module controller (
     wire jal = (opeCode == 6'b000011);
     wire addi = (opeCode == 6'b001000);
     wire addiu = (opeCode == 6'b001001);
+    wire mtc0 = (opeCode == 6'b010000)&(moveCode == 5'b00100);
+    wire mfc0 = (opeCode == 6'b010000)&(moveCode == 5'b00000);
+    wire eret = (funct == 6'b011000)&(opeCode == 6'b010000);
 
     parameter [2:0] FETCH = 3'b000,
                     DCD = 3'b001,
                     EXE = 3'b010,
                     MA = 3'b011,
                     WB = 3'b100,
-                    PRESTART = 3'b111;
+                    ITRPT = 3'b111,
+                    INTJ = 3'b110;
 
     reg [2:0] nowState;
     reg [2:0] nextState;
-    reg [2:0] defaulter = 0;
 
     always @(posedge clk, negedge rst) begin
         if(~rst)begin 
@@ -45,19 +50,14 @@ module controller (
     end
 
     always @(*) begin
-        case(nowState)
-            // PRESTART:begin
-            //     nextState = DCD;
-            //     $display("start ~");
-            // end
-          
+        case(nowState)         
             FETCH:begin//0
                 nextState = DCD;
                 $display("[ctrl]from fetch to decode");
             end
 
             DCD:begin//1
-                if(jal)begin
+                if(jal|mfc0)begin
                     nextState = WB;
                     $display("[ctrl]from decode to writeback");
                 end
@@ -68,15 +68,16 @@ module controller (
             end
 
             EXE:begin//2
-                if(beq|j|jr) begin
-                    nextState = FETCH;
+                if(beq|j|jr|eret) begin
+                    if(IntReq) nextState = ITRPT;
+                    else nextState = FETCH;
                     $display("[ctrl]from execute to fetch");                    
                 end
                 else if(addu|subu|addi|addiu|ori|lui|slt) begin
                     nextState = WB;
                     $display("[ctrl]from execute to writeback"); 
                 end
-                //else if(lw|lb|sw|sb) begin
+                //else if(lw|lb|sw|sb|mtc0) begin
                 else begin
                     nextState = MA;
                     $display("[ctrl]from execute to memoryaccess");                     
@@ -89,37 +90,41 @@ module controller (
                     $display("[ctrl]from memoryaccess to writeback");                        
                 end
                 else begin
-                    nextState = FETCH;
+                    if(IntReq) nextState = ITRPT;
+                    else nextState = FETCH;
                     $display("[ctrl]from memoryaccess to fetch");                    
                 end
             end
 
             WB:begin//4
-                nextState = FETCH;
+                if(IntReq) nextState = ITRPT;
+                else nextState = FETCH;
                 $display("[ctrl]from writeback to fetch");
+            end
+
+            ITRPT:begin
+                nextState = INTJ;
+            end
+
+            INTJ:begin
+                nextState = FETCH;
             end
         endcase
     end
 
     always@(*) begin
         case(nowState)
-            // PRESTART:begin//7
-            //     PCWr = 0;
-            //     IRWr = 1;
-            //     DMWr = 0;
-            //     GPRWr = 0;
-            //     //00:pc+4 01:beq 10:j|jal 11:jr
-            //     NPCop[0] = beq|jr;
-            //     NPCop[1] = j|jal|jr;
-            //end
             FETCH:begin//0
                 PCWr = 1;
                 IRWr = 1;
                 DMWr = 0;
                 GPRWr = 0;
+                EPCWr = 0;
+                wen = 0;
                 //00:pc+4
                 NPCop[0] = 0;
                 NPCop[1] = 0;
+                eretOp = 0;
             end
 
             DCD:begin//1
@@ -127,22 +132,29 @@ module controller (
                 IRWr = 0;
                 DMWr = 0;
                 GPRWr = 0;
+                EPCWr = 0;
+                wen = 0;
                 ExtOp[0] = lw|lb|sw|sb|addi;//01:sign ext
                 ExtOp[1] = lui;             //10:lui ext
+                mfc0Op = mfc0;
             end
 
             EXE:begin//2
-                PCWr = beq|j|jr;
+                PCWr = beq|j|jr|eret;
                 IRWr = 0;
                 DMWr = 0;
                 GPRWr = 0;
+                EPCWr = 0;
+                EXLWr = (eret)? 0 : EXLWr;
+                wen = 0;
                 ALUsrc = ori|lw|lb|sw|sb|lui|addi|addiu;
                 ALUop[0] = subu|beq|slt;
                 ALUop[1] = ori|slt;
                 ALUsign = addi|slt;
-                //00:pc+4 01:beq 10:j|jal 11:jr
-                NPCop[0] = beq|jr;
-                NPCop[1] = j|jal|jr;
+                //00:pc+4 01:beq 10:j|jal 11:jr|eret
+                NPCop[0] = beq|jr|eret;
+                NPCop[1] = j|jal|jr|eret;
+                eretOp = eret;
             end
             
             MA:begin//3
@@ -150,6 +162,8 @@ module controller (
                 IRWr = 0;
                 DMWr = sw|sb;
                 GPRWr = 0;
+                EPCWr = 0;
+                wen = mtc0;
                 byteOp = lb|sb;
             end
 
@@ -157,16 +171,40 @@ module controller (
                 PCWr = jal;
                 IRWr = 0;
                 DMWr = 0;
-                GPRWr = addu|subu|addi|addiu|slt|ori|lw|lb|lui|jal;
+                GPRWr = addu|subu|addi|addiu|slt|ori|lw|lb|lui|jal|mfc0;
+                EPCWr = 0;
+                wen = 0;
                 //00reg: 01:dm 10:npc 11:1
                 M2Rsel[0] = lw|lb|overflow;
                 M2Rsel[1] = jal|overflow;
                 //00:[15:11] 01:[20:16] 10:$31 11:$30overflow
-                GPRsel[0] = ori|lw|lb|lui|addi|addiu;
+                GPRsel[0] = ori|lw|lb|lui|addi|addiu|mfc0;
                 GPRsel[1] = jal|overflow;
                 //00:pc+4 01:beq 10:j|jal 11:jr
                 NPCop[0] = beq|jr;
                 NPCop[1] = j|jal|jr;
+            end
+            ITRPT:begin
+                PCWr = 0;
+                IRWr = 0;
+                DMWr = 0;
+                GPRWr = 0;
+                EPCWr = 1;
+                EXLWr = 1;
+                wen = 1;
+            end
+
+            INTJ:begin
+                PCWr = 1;
+                IRWr = 0;
+                DMWr = 0;
+                GPRWr = 0;
+                EPCWr = 1;
+                EXLWr = 1;
+                wen = 1;
+                //00:pc+4 01:beq 10:j|jal 11:jr
+                NPCop[0] = beq|jr;
+                NPCop[1] = j|jal|jr;                
             end
         endcase
     end

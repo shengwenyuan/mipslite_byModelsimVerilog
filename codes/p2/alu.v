@@ -26,3 +26,4 @@ module alu(ope1, ope2, ALUop, ALUsign, result, zero, overflow);
 
 endmodule
 
+

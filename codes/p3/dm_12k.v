@@ -1,4 +1,4 @@
-module dm_1k( addr, din, we, byteOp, clk, dout );
+module dm_12k( addr, din, we, byteOp, clk, dout );
     input [13:0] addr;  // address bus
     input [31:0] din;   // 32-bit input data
     input we, byteOp;    // memory write enable

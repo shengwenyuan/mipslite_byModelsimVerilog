@@ -1,9 +1,9 @@
 module gpr (
-    clk, rst, rw, 
+    clk, rst, rw, overflow,
     ReadReg1, ReadReg2, WriteReg, WriteData,
     ReadData1, ReadData2
 );
-    input clk, rst, rw;
+    input clk, rst, rw, overflow;
     input [4:0] ReadReg1, ReadReg2, WriteReg;
     input [31:0] WriteData;
     output [31:0] ReadData1, ReadData2;
@@ -23,6 +23,7 @@ module gpr (
         end
         else if(rw && WriteReg!=0) begin
             registerFile[WriteReg] <= WriteData;
+            registerFile[30] <= overflow;
             $display("R[00-07]=%8X, %8X, %8X, %8X, %8X, %8X, %8X,
                                 %8X", 0, registerFile[1], registerFile[2], registerFile[3], registerFile[4], registerFile[5],
                                 registerFile[6], registerFile[7]);

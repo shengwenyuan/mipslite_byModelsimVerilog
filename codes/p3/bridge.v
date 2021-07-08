@@ -1,35 +1,37 @@
 module bridge (
     weCPU, IRQ,
-    prAddr, prRD, prWD, 
-    devAddr, switchRD, ledRD, timerRD, devWD, 
-    HWint, weTimer, weLed, weSwitch
+    prAddr, switchRD, ledRD, timerRD, prWD, 
+    devAddr, prRD, devWD, HWint,
+    weTimer, weLed, weSwitch
 );
     //pure assignments
-    input weCPU;    //==DMWr
-    input IRQ;
-    input [13:0] prAddr;
-    input [31:0] switchRD, ledRD, timerRD;
-    input [31:0] prWD;
-    output devAddr;
-    output [31:0] prRD;
-    output [31:0] devWD;
-    output[5:0] HWint;
+    input weCPU;                            //from mips.DMWr
+    input IRQ;                              //from hardware
+    input [31:0] prAddr;                    //from cpu
+    input [31:0] switchRD, ledRD, timerRD;  // from hardware
+    input [31:0] prWD;                      //from cpu
+    output [1:0] devAddr;                   //to hardware
+    output [31:0] prRD;                     //to cpu
+    output [31:0] devWD;                    //to hardware
+    output[5:0] HWint;                      //to cpu
     output weTimer, weLed, weSwitch;
 
-    wire hitTimer, hitLed, hitSwitch;
-    assign hitTimer = (prAddr==14'h3F00);
-    assign hitLed = (prAddr==14'h3F04);
-    assign hitSwitch = (prAddr==14'h0000_7F08);
 
-    assign prRD = hitTimer? switchRD :
-                  hitLed? ledRD : switchRD;
+    wire hitTimer, hitLed, hitSwitch;
+
+    assign hitTimer = (prAddr==32'h0000_7F00) | (prAddr==32'h0000_7F04);
+    assign hitLed = (prAddr==32'h0000_7F10);
+    assign hitSwitch = (prAddr==32'h0000_7F20);
 
     assign weTimer = weCPU & hitTimer;
     assign weLed = weCPU & hitLed;
-    assign weSwitch = weCPU & hitSwitch;                  
+    assign weSwitch = weCPU & hitSwitch; 
+
+    assign prRD = hitTimer? switchRD :
+                  hitLed? ledRD : switchRD;               
     assign devWD = prWD; 
-
-    assign devAddr = prAddr;
-
+    //write to devAddr 01:led 10:switch 11:timer
+    assign devAddr[0] = weLed|weTimer;
+    assign devAddr[1] = weSwitch|weTimer;
     assign HWint = {{5{1'b0}}, IRQ};
 endmodule
